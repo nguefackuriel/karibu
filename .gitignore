@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+
+# Secrets and local config
+.env
+*.env
+*.pem
+
+# Models and data
+models/
+*.bin
+*.gguf
+*.ct2/
+*.db
+*.sqlite
+
+# OS and editors
+.DS_Store
+.vscode/
+.idea/
+
+# Media
+*.mp4
+*.mov
+*.wav
+*.mp3
