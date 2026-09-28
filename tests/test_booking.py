@@ -224,3 +224,27 @@ def test_every_host_message_costs_exactly_one_sms(key):
 def test_date_range_stays_short_across_a_month_boundary():
     assert tpl.format_stay(date(2026, 9, 30), 2) == "30 sept-2 oct"
     assert tpl.format_stay(date(2026, 10, 12), 2) == "12-14 oct"
+
+
+# --- the visitor reads their own language, not a mix --------------------------
+
+
+def test_the_korean_confirmation_carries_no_french_month():
+    booking, _ = start(visitor_lang="ko")
+    _, out = on_host_reply(booking, "1")
+    text = out[1].text
+    assert "oct" not in text.lower(), "a Korean message must not carry a French month"
+    assert "breakfast" not in text.lower(), "nor an English word for the meal"
+    assert "10월 12일-14일" in text
+
+
+def test_the_english_confirmation_uses_english_months():
+    booking, _ = start(visitor_lang="en")
+    _, out = on_host_reply(booking, "1")
+    assert "12-14 Oct" in out[1].text
+
+
+def test_the_host_sms_stays_french_whatever_the_visitor_speaks():
+    booking, _ = start(visitor_lang="ko")
+    _, out = on_host_reply(booking, "1")
+    assert "12-14 oct" in out[0].text

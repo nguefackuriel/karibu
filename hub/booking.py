@@ -157,11 +157,12 @@ def _host_params(booking: Booking) -> dict:
 
 def _visitor_params(booking: Booking) -> dict:
     req = booking.request
+    lang = req.visitor_lang
     return {
         "ref": booking.ref,
-        "stay": tpl.format_stay(req.check_in, req.nights),
+        "stay": tpl.format_stay(req.check_in, req.nights, lang),
         "guests": req.guests,
-        "meal": " + breakfast" if req.breakfast else "",
+        "meal": tpl.MEAL_WORDS.get(lang, " + breakfast") if req.breakfast else "",
         "total": tpl.format_money(booking.price_total),
         "cur": booking.currency,
         "hours": int(HOST_REPLY_WINDOW.total_seconds() // 3600),

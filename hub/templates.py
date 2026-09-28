@@ -25,6 +25,14 @@ MONTHS_FR = [
     "juil", "aout", "sept", "oct", "nov", "dec",
 ]
 
+MONTHS_EN = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+]
+
+# The word for breakfast as each side should read it.
+MEAL_WORDS = {"fr": " +petit dej", "en": " + breakfast", "ko": ", \uc870\uc2dd \ud3ec\ud568"}
+
 TEMPLATES: dict[str, dict[str, str]] = {
     # --- host side, French, one SMS segment ---
     "host_request": {
@@ -122,17 +130,29 @@ def fits_one_sms(text: str) -> bool:
     return is_gsm7(text) and len(text) <= SMS_SEGMENT
 
 
-def format_stay(check_in, nights: int) -> str:
-    """Short French date range: '12-14 oct' or '30 sept-2 oct'."""
+def format_stay(check_in, nights: int, lang: str = "fr") -> str:
+    """A short date range, written the way the reader writes dates.
+
+    The host always reads French because that is the language of the SMS. The
+    visitor reads their own, so a Korean confirmation does not carry a French
+    month abbreviation in the middle of it.
+    """
     from datetime import timedelta
 
     check_out = check_in + timedelta(days=nights)
-    if check_in.month == check_out.month:
-        return f"{check_in.day}-{check_out.day} {MONTHS_FR[check_in.month - 1]}"
-    return (
-        f"{check_in.day} {MONTHS_FR[check_in.month - 1]}"
-        f"-{check_out.day} {MONTHS_FR[check_out.month - 1]}"
-    )
+    same_month = check_in.month == check_out.month
+
+    if lang == "ko":
+        if same_month:
+            return f"{check_in.month}\uc6d4 {check_in.day}\uc77c-{check_out.day}\uc77c"
+        return (f"{check_in.month}\uc6d4 {check_in.day}\uc77c"
+                f"-{check_out.month}\uc6d4 {check_out.day}\uc77c")
+
+    months = MONTHS_EN if lang == "en" else MONTHS_FR
+    if same_month:
+        return f"{check_in.day}-{check_out.day} {months[check_in.month - 1]}"
+    return (f"{check_in.day} {months[check_in.month - 1]}"
+            f"-{check_out.day} {months[check_out.month - 1]}")
 
 
 def format_day(day) -> str:

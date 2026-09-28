@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Karibu — tourism office</title>
+<style>
+  :root{
+    --ink:#1c1a17; --muted:#6b6459; --line:#e0d9cd; --paper:#faf7f1; --card:#fff;
+    --accent:#1f6f5c; --accent-soft:#e8f2ee; --amber:#a06a12; --amber-soft:#faf0dc;
+    --grey-soft:#f0ede7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+       font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif}
+  .wrap{max-width:1040px;margin:0 auto;padding:24px 20px 64px}
+  header{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;
+         border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:24px;flex-wrap:wrap}
+  h1{font-size:1.4rem;margin:0}
+  .sub{color:var(--muted);font-size:.85rem;margin:2px 0 0}
+  h2{font-size:.78rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);
+     margin:28px 0 10px;font-weight:600}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
+  .tile .n{font-size:1.7rem;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .tile .l{color:var(--muted);font-size:.8rem;margin-top:2px}
+  table{width:100%;border-collapse:collapse;background:var(--card);
+        border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:.88rem}
+  th{background:var(--grey-soft);color:var(--muted);font-weight:600;font-size:.76rem;
+     text-transform:uppercase;letter-spacing:.05em}
+  tr:last-child td{border-bottom:0}
+  td.num{font-variant-numeric:tabular-nums;text-align:right}
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:.75rem;font-weight:600}
+  .confirmed{background:var(--accent-soft);color:var(--accent)}
+  .awaiting_host{background:var(--amber-soft);color:var(--amber)}
+  .expired,.declined,.cancelled,.alt_date{background:var(--grey-soft);color:var(--muted)}
+  .log{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .line{display:grid;grid-template-columns:78px 1fr;gap:12px;padding:9px 12px;
+        border-bottom:1px solid var(--line);font-size:.85rem}
+  .line:last-child{border-bottom:0}
+  .dir{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .out{color:var(--accent)} .in{color:var(--amber)}
+  .body{white-space:pre-wrap;word-break:break-word}
+  .meta{color:var(--muted);font-size:.74rem;margin-top:2px}
+  .scroll{overflow-x:auto}
+  a{color:var(--accent)}
+  footer{color:var(--muted);font-size:.78rem;margin-top:32px;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Karibu — destination dashboard</h1>
+      <p class="sub">What the tourism office sees. Every room bookable from a basic phone.</p>
+    </div>
+    <p class="sub" id="clock"></p>
+  </header>
+
+  <div class="tiles" id="tiles"></div>
+
+  <h2>Rooms in the catalogue</h2>
+  <div class="scroll"><table id="catalogue"></table></div>
+
+  <h2>Recent bookings</h2>
+  <div class="scroll"><table id="bookings"></table></div>
+
+  <h2>Message log</h2>
+  <div class="log" id="log"></div>
+
+  <footer>
+    Open catalogue: <a href="/api/catalogue.json">/api/catalogue.json</a> —
+    any destination portal can read these rooms without Karibu knowing about it.<br>
+    The hub runs on one machine at the office. No booking passes through the internet.
+  </footer>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const money = (n) => (n ?? 0).toLocaleString("en-US");
+
+function tiles(s) {
+  const items = [
+    ["Rooms listed", s.rooms],
+    ["Bookings", s.bookings],
+    ["Nights sold", s.nights_sold],
+    [`Revenue to hosts (${s.currency})`, money(s.revenue)],
+    ["Confirmation rate", `${Math.round((s.confirmation_rate || 0) * 100)}%`],
+  ];
+  $("tiles").innerHTML = items.map(([l, n]) =>
+    `<div class="tile"><div class="n">${n}</div><div class="l">${l}</div></div>`).join("");
+}
+
+function catalogue(rows) {
+  $("catalogue").innerHTML =
+    `<tr><th>Host</th><th>Village</th><th>Site</th><th class="num">Rooms</th>
+     <th class="num">Price / night</th><th>Breakfast</th></tr>` +
+    rows.map(r => `<tr>
+      <td>${r.host_name}</td><td>${r.host_village ?? "—"}</td><td>${r.host_site ?? "—"}</td>
+      <td class="num">${r.rooms}</td>
+      <td class="num">${money(r.price_per_night)} ${r.currency}</td>
+      <td>${r.breakfast ? "included" : "no"}</td></tr>`).join("");
+}
+
+function bookings(rows) {
+  $("bookings").innerHTML =
+    `<tr><th>Ref</th><th>Arrival</th><th class="num">Nights</th><th class="num">Guests</th>
+     <th class="num">Total</th><th>State</th></tr>` +
+    (rows.length ? rows.map(r => `<tr>
+      <td>${r.ref}</td><td>${r.check_in}</td>
+      <td class="num">${r.nights}</td><td class="num">${r.guests}</td>
+      <td class="num">${money(r.price_total)} ${r.currency}</td>
+      <td><span class="pill ${r.state}">${r.state.replace("_", " ")}</span></td></tr>`).join("")
+      : `<tr><td colspan="6">No bookings yet.</td></tr>`);
+}
+
+async function refresh() {
+  const s = await (await fetch("/api/stats")).json();
+  tiles(s); catalogue(s.catalogue || []); bookings(s.recent || []);
+
+  const log = (await (await fetch("/api/messages?limit=25")).json()).messages;
+  $("log").innerHTML = log.map(m => `<div class="line">
+      <div class="dir ${m.direction}">${m.direction === "out" ? "sent" : "received"}</div>
+      <div><div class="body">${m.body}</div>
+        <div class="meta">${m.channel.toUpperCase()} · ${m.peer} · ${m.lang ?? ""}
+          ${m.channel === "sms" ? `· ${m.segments} segment${m.segments > 1 ? "s" : ""}` : ""}
+          · ${m.created_at.replace("T", " ")}</div></div>
+    </div>`).join("");
+
+  $("clock").textContent = "updated " + new Date().toLocaleTimeString();
+}
+
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>

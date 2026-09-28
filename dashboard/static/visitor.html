@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Karibu — book a room</title>
+<style>
+  :root{
+    --ink:#1c1a17; --muted:#6b6459; --line:#e0d9cd; --paper:#faf7f1;
+    --card:#fff; --accent:#1f6f5c; --accent-soft:#e8f2ee; --warn:#8a5a1f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+       font:16px/1.55 ui-sans-serif,system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif}
+  .wrap{max-width:560px;margin:0 auto;padding:24px 20px 64px}
+  header{border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:24px}
+  h1{font-size:1.5rem;margin:0 0 4px;letter-spacing:-.01em}
+  .sub{color:var(--muted);font-size:.9rem;margin:0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:16px}
+  .listing{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+  .listing strong{font-size:1.05rem}
+  .price{color:var(--accent);font-weight:600;white-space:nowrap}
+  label{display:block;font-size:.85rem;color:var(--muted);margin:0 0 6px}
+  textarea{width:100%;min-height:96px;padding:12px;border:1px solid var(--line);
+           border-radius:8px;font:inherit;background:#fff;resize:vertical}
+  textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
+  .langs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+  .langs button{border:1px solid var(--line);background:#fff;padding:6px 12px;border-radius:999px;
+                font:inherit;font-size:.85rem;cursor:pointer;color:var(--muted)}
+  .langs button[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+  .send{width:100%;margin-top:14px;padding:13px;border:0;border-radius:8px;background:var(--accent);
+        color:#fff;font:inherit;font-weight:600;cursor:pointer}
+  .send:disabled{background:#9db8b0;cursor:progress}
+  .understood{margin-top:16px;padding:14px;background:var(--accent-soft);border-radius:8px;font-size:.9rem}
+  .understood dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:8px 0 0}
+  .understood dt{color:var(--muted)}
+  .understood dd{margin:0;font-variant-numeric:tabular-nums}
+  .tag{font-size:.72rem;padding:1px 6px;border-radius:4px;background:#fff;border:1px solid var(--line);
+       color:var(--muted);margin-left:6px}
+  .status{display:flex;align-items:center;gap:10px;font-weight:600}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--warn);flex:none}
+  .dot.ok{background:var(--accent)}
+  .thread{margin-top:14px;border-top:1px solid var(--line);padding-top:14px}
+  .msg{padding:10px 12px;border-radius:8px;margin-bottom:8px;font-size:.9rem;background:#f4f1ea}
+  .err{color:#8a2020;font-size:.9rem;margin-top:12px}
+  footer{color:var(--muted);font-size:.78rem;text-align:center;margin-top:28px;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Karibu</h1>
+    <p class="sub">Write in your own language. The host answers from a basic phone.</p>
+  </header>
+
+  <div class="card" id="listing-card">
+    <div class="listing">
+      <div><strong id="host-name">…</strong><div class="sub" id="host-place"></div></div>
+      <div class="price" id="host-price"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="langs" id="langs">
+      <button data-lang="ko" aria-pressed="true">한국어</button>
+      <button data-lang="en" aria-pressed="false">English</button>
+      <button data-lang="fr" aria-pressed="false">Français</button>
+    </div>
+    <label for="msg">Your request</label>
+    <textarea id="msg">10월 12일부터 2박, 2명 가능한가요? 아침 식사 포함인가요?</textarea>
+    <button class="send" id="send">Send to the host</button>
+    <div id="understood"></div>
+    <div class="err" id="err"></div>
+  </div>
+
+  <div class="card" id="result" hidden>
+    <div class="status"><span class="dot" id="dot"></span><span id="state">…</span></div>
+    <div class="thread" id="thread"></div>
+  </div>
+
+  <footer>
+    No app, no account. Your request becomes one 160-character SMS.<br>
+    Nothing here leaves the hub running at the tourism office.
+  </footer>
+</div>
+
+<script>
+const PLACEHOLDERS = {
+  ko: "10월 12일부터 2박, 2명 가능한가요? 아침 식사 포함인가요?",
+  en: "Do you have a room for 2 people from 12 October for two nights, with breakfast?",
+  fr: "Avez-vous de la place pour 2 personnes du 12 au 14 octobre, avec petit dejeuner ?"
+};
+let lang = "ko", ref = null, poll = null;
+
+const $ = (id) => document.getElementById(id);
+
+document.querySelectorAll("#langs button").forEach(btn => {
+  btn.onclick = () => {
+    lang = btn.dataset.lang;
+    document.querySelectorAll("#langs button").forEach(b =>
+      b.setAttribute("aria-pressed", String(b === btn)));
+    $("msg").value = PLACEHOLDERS[lang];
+  };
+});
+
+async function loadListing() {
+  const r = await fetch("/api/catalogue.json");
+  const body = await r.json();
+  const provider = body.providers[0];
+  if (!provider) { $("host-name").textContent = "No listing yet"; return; }
+  const item = provider.items[0];
+  $("host-name").textContent = provider.descriptor.name;
+  $("host-place").textContent = item.tags.place || "";
+  $("host-price").textContent = `${item.price.value} ${item.price.currency} / night`;
+  window.LISTING = item.id;
+}
+
+function renderUnderstood(u) {
+  const by = u.read_by || {};
+  const tag = (f) => by[f] ? `<span class="tag">${by[f]}</span>` : "";
+  $("understood").innerHTML = `<div class="understood"><b>What Karibu understood</b>
+    <dl>
+      <dt>Arrival</dt><dd>${u.check_in ?? "—"} ${tag("check_in")}</dd>
+      <dt>Nights</dt><dd>${u.nights ?? "—"} ${tag("nights")}</dd>
+      <dt>Guests</dt><dd>${u.guests ?? "—"} ${tag("guests")}</dd>
+      <dt>Breakfast</dt><dd>${u.breakfast ? "yes" : "no"} ${tag("breakfast")}</dd>
+    </dl></div>`;
+}
+
+$("send").onclick = async () => {
+  $("err").textContent = ""; $("send").disabled = true;
+  try {
+    const r = await fetch("/api/requests", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({listing_id: window.LISTING, message: $("msg").value, lang})
+    });
+    const body = await r.json();
+    renderUnderstood(body.understood || {});
+    if (!r.ok) { $("err").textContent = body.error || "Could not read that request."; return; }
+    ref = body.ref;
+    $("result").hidden = false;
+    await refresh();
+    poll = setInterval(refresh, 2000);
+  } catch (e) { $("err").textContent = String(e); }
+  finally { $("send").disabled = false; }
+};
+
+async function refresh() {
+  if (!ref) return;
+  const body = await (await fetch(`/api/requests/${ref}`)).json();
+  const settled = body.state !== "awaiting_host";
+  $("dot").className = "dot" + (body.state === "confirmed" ? " ok" : "");
+  $("state").textContent = `${body.state.replace("_", " ")} — ${body.ref}`;
+  $("thread").innerHTML = body.messages
+    .filter(m => m.channel === "web" && m.direction === "out")
+    .map(m => `<div class="msg">${m.body}</div>`).join("");
+  if (settled && poll) { clearInterval(poll); poll = null; }
+}
+
+loadListing();
+</script>
+</body>
+</html>
