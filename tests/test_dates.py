@@ -112,12 +112,44 @@ def test_a_past_month_means_next_year():
     assert got.check_in == date(2027, 1, 3)
 
 
-def test_relative_dates_are_left_to_the_model():
-    got = read("next week friday for 3 nights")
-    assert got.check_in is None, "rules must not guess relative dates"
+def test_a_date_no_rule_can_read_is_left_to_the_model():
+    """The rules stop where certainty stops, and say so by leaving it empty."""
+    got = read("we would like to come around the harvest festival, 3 nights")
+    assert got.check_in is None
     assert got.nights == 3
 
 
 def test_an_empty_message_reads_nothing():
     got = read("bonjour")
     assert got.check_in is None and got.nights is None and got.guests is None
+
+
+# --- dates given by pointing rather than naming --------------------------------
+# TODAY is Thursday 8 October 2026.
+
+
+@pytest.mark.parametrize(
+    "message,expected",
+    [
+        ("tomorrow, 2 nights", date(2026, 10, 9)),
+        ("demain, 2 nuits", date(2026, 10, 9)),
+        ("오늘 말고 내일", date(2026, 10, 9)),
+        ("day after tomorrow", date(2026, 10, 10)),
+        ("friday for 3 nights", date(2026, 10, 9)),
+        ("next week friday, 3 nights", date(2026, 10, 16)),
+        ("vendredi prochain", date(2026, 10, 9)),
+        ("다음 주 금요일부터 3박", date(2026, 10, 16)),
+        ("in 3 days", date(2026, 10, 11)),
+        ("dans 2 semaines", date(2026, 10, 22)),
+        ("this weekend", date(2026, 10, 10)),
+    ],
+)
+def test_relative_dates_are_arithmetic_not_guesswork(message, expected):
+    got = read(message)
+    assert got.check_in == expected
+    assert got.read_by["check_in"] == "rule"
+
+
+def test_an_explicit_date_still_wins_over_a_weekday_word():
+    got = read("friday 12 october, 2 nights")
+    assert got.check_in == date(2026, 10, 12)

@@ -22,9 +22,8 @@ Return ONLY a JSON object with these keys, using null when the message does not 
   check_in: the arrival date as YYYY-MM-DD
   nights: how many nights, as a number
   guests: how many people, as a number
-  breakfast: true or false
 
-Do not explain. Do not invent a date the message does not contain.
+Do not explain. If the message names no date at all, use null for check_in.
 
 Message: {message}"""
 
@@ -121,9 +120,9 @@ def extract(
             if candidate:
                 out.guests = candidate
                 out.read_by["guests"] = "model"
-        if out.breakfast is None and isinstance(suggestion.get("breakfast"), bool):
-            out.breakfast = suggestion["breakfast"]
-            out.read_by["breakfast"] = "model"
+        # Breakfast is deliberately not asked of the model: in testing it
+        # answered "true" for every message, including ones that never
+        # mentioned a meal. The rules read the word or nobody does.
 
     # Last resort, so a half-read message still reaches the host as a question.
     defaults = defaults or {"nights": 1, "guests": 2, "breakfast": False}

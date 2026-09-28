@@ -38,6 +38,26 @@ for index, names in enumerate(
 
 MONTH_WORDS = "|".join(sorted(MONTHS, key=len, reverse=True))
 
+WEEKDAYS: dict[str, int] = {}
+for index, names in enumerate(
+    [
+        ("monday", "mon", "lundi", "\uc6d4\uc694\uc77c"),
+        ("tuesday", "tue", "tues", "mardi", "\ud654\uc694\uc77c"),
+        ("wednesday", "wed", "mercredi", "\uc218\uc694\uc77c"),
+        ("thursday", "thu", "thur", "thurs", "jeudi", "\ubaa9\uc694\uc77c"),
+        ("friday", "fri", "vendredi", "\uae08\uc694\uc77c"),
+        ("saturday", "sat", "samedi", "\ud1a0\uc694\uc77c"),
+        ("sunday", "sun", "dimanche", "\uc77c\uc694\uc77c"),
+    ]
+):
+    for name in names:
+        WEEKDAYS[name] = index
+
+NEXT_WEEK_WORDS = ("next week", "semaine prochaine", "\ub2e4\uc74c \uc8fc", "\ub2e4\uc74c\uc8fc")
+TOMORROW_WORDS = ("tomorrow", "demain", "\ub0b4\uc77c")
+AFTER_TOMORROW_WORDS = ("day after tomorrow", "apres-demain", "apres demain", "\ubaa8\ub808")
+WEEKEND_WORDS = ("this weekend", "ce week-end", "ce weekend", "\uc774\ubc88 \uc8fc\ub9d0", "\uc8fc\ub9d0")
+
 BREAKFAST_WORDS = ("petit dejeuner", "petit dej", "petitdej", "breakfast", "아침")
 NEGATIONS = ("sans", "without", "no ", "not ", "pas de", "없이", "안 ")
 
@@ -124,6 +144,51 @@ def _find_bare_range(text: str) -> tuple[int, int] | None:
     return None
 
 
+def _weekday_on_or_after(today: date, weekday: int, next_week: bool) -> date:
+    """The next occurrence of a weekday, or the one in the following week."""
+    if next_week:
+        monday_next = today + timedelta(days=7 - today.weekday())
+        return monday_next + timedelta(days=weekday)
+    ahead = (weekday - today.weekday()) % 7
+    return today + timedelta(days=ahead or 7)
+
+
+def _find_relative(text: str, today: date) -> date | None:
+    """Dates a person gives by pointing rather than by naming.
+
+    "next Friday", "demain", "\ub2e4\uc74c \uc8fc \uae08\uc694\uc77c" are all exact once you know
+    today, so they are arithmetic, not a job for a language model.
+    """
+    for word in AFTER_TOMORROW_WORDS:
+        if word in text:
+            return today + timedelta(days=2)
+    for word in TOMORROW_WORDS:
+        if word in text:
+            return today + timedelta(days=1)
+
+    match = re.search(r"\b(?:in|dans)\s+(\d{1,2})\s+(days?|jours?|weeks?|semaines?)\b", text)
+    if match:
+        count = int(match.group(1))
+        unit = match.group(2)
+        return today + timedelta(days=count * (7 if unit.startswith(("week", "semaine")) else 1))
+
+    next_week = any(word in text for word in NEXT_WEEK_WORDS)
+
+    for name, weekday in sorted(WEEKDAYS.items(), key=lambda kv: -len(kv[0])):
+        pattern = name if not name.isascii() else rf"\b{name}\b"
+        if re.search(pattern, text):
+            return _weekday_on_or_after(today, weekday, next_week)
+
+    for word in WEEKEND_WORDS:
+        if word in text:
+            return _weekday_on_or_after(today, 5, next_week)
+
+    if next_week:
+        return today + timedelta(days=7 - today.weekday())
+
+    return None
+
+
 def read(message: str, today: date) -> DateReading:
     """Read what can be read with certainty. Everything else stays empty."""
     text = normalise(message)
@@ -170,6 +235,11 @@ def read(message: str, today: date) -> DateReading:
         day, month = pairs[0]
         out.check_in = _resolve_year(month, day, today)
         out.mark("check_in", "rule")
+    else:
+        relative = _find_relative(text, today)
+        if relative is not None:
+            out.check_in = relative
+            out.mark("check_in", "rule")
 
     # --- guests -------------------------------------------------------------
     if re.search(r"혼자", text):  # 혼자, "alone"
