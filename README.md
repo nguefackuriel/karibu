@@ -108,8 +108,21 @@ python scripts/check_sms.py # sends one message and reports what the operator sa
 
 The key lives at **account.africastalking.com → your sandbox app → Settings →
 API Key**. Nothing else changes: the hub picks the gateway up at startup, and
-`/health` reports `sms_configured`. For the host's replies to reach the hub,
-point the app's incoming-SMS callback at `https://<your tunnel>/api/sms/inbound`.
+`/health` reports `sms_configured` and which gateway is live.
+
+### Receiving the host's replies
+
+Outgoing SMS needs only the key. Incoming SMS is a webhook, so the operator has
+to reach this machine:
+
+```bash
+./scripts/tunnel.sh        # prints a public https address
+```
+
+Paste the address it prints, ending in `/api/sms/inbound`, into the sandbox's
+SMS callback setting. The address changes every time the tunnel restarts.
+Without it, host replies still work through `/api/sms/simulate`, which is what
+`scripts/demo.py` uses.
 
 ## Tests
 
