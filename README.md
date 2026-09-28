@@ -95,6 +95,22 @@ To watch the whole scenario in the terminal:
 python scripts/demo.py
 ```
 
+### Sending a real SMS
+
+Without a key, Karibu prints each SMS to the terminal and the demo runs
+anywhere. To send through the Africa's Talking sandbox instead, which reaches
+their simulator rather than a real handset and costs nothing:
+
+```bash
+cp .env.example .env        # then paste your sandbox API key into it
+python scripts/check_sms.py # sends one message and reports what the operator said
+```
+
+The key lives at **account.africastalking.com → your sandbox app → Settings →
+API Key**. Nothing else changes: the hub picks the gateway up at startup, and
+`/health` reports `sms_configured`. For the host's replies to reach the hub,
+point the app's incoming-SMS callback at `https://<your tunnel>/api/sms/inbound`.
+
 ## Tests
 
 ```bash

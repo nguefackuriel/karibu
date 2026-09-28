@@ -39,8 +39,25 @@ def new_ref() -> str:
     return "".join(secrets.choice(alphabet) for _ in range(4))
 
 
+def load_env_file(path: Path | None = None) -> None:
+    """Read .env if it is there, without overriding anything already set.
+
+    Keeps the API key out of the shell history and out of the repository.
+    """
+    target = path or Path(__file__).resolve().parent.parent / ".env"
+    if not target.exists():
+        return
+    for line in target.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    load_env_file()
     state["db"] = store.connect(os.environ.get("KARIBU_DB"))
     state["gateway"] = from_environment()
     state["model"] = Ollama(model=os.environ.get("KARIBU_MODEL", "gemma3:1b"))
@@ -123,6 +140,7 @@ def health():
         "model_reachable": model.available(),
         "voice": state["voice"].size,
         "voice_available": state["voice"].available(),
+        "sms_configured": bool(os.environ.get("AT_API_KEY")),
     }
 
 
