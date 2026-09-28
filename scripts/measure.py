@@ -21,7 +21,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from hub import templates as tpl                      # noqa: E402
 from hub.services.extract import extract              # noqa: E402
+from hub.services.listing import read as read_listing  # noqa: E402
 from hub.services.ollama import Ollama                # noqa: E402
+from hub.services.voice import Whisper                # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "docs" / "measurements.md"
@@ -85,6 +87,29 @@ def main() -> None:
         print("measuring the model fallback (this is the slow path) ...")
         model_stats = summarise(timed(extract, MODEL_MESSAGE, TODAY, model, runs=5))
 
+    voice = Whisper(size="small")
+    voice_stats = None
+    fixture = ROOT / "tests" / "fixtures" / "host-signup-fr.wav"
+    if voice.available() and fixture.exists():
+        print("measuring speech recognition (loading the model first) ...")
+        voice.transcribe(fixture)          # warm: the first call loads the model
+        transcript = voice.transcribe(fixture)
+        seconds = voice.last_latency or 0
+        audio_seconds = 0.0
+        try:
+            import wave
+            with wave.open(str(fixture)) as handle:
+                audio_seconds = handle.getnframes() / handle.getframerate()
+        except Exception:
+            pass
+        reading = read_listing(transcript)
+        voice_stats = {
+            "seconds": round(seconds, 1),
+            "audio_seconds": round(audio_seconds, 1),
+            "realtime": round(audio_seconds / seconds, 1) if seconds else 0,
+            "complete": reading.complete,
+        }
+
     print("counting SMS ...")
     host_messages = {
         key: tpl.render(key, "fr", {
@@ -105,6 +130,20 @@ def main() -> None:
         for folder in ("hub", "channels")
         for path in (ROOT / folder).rglob("*.py")
     )
+
+    if voice_stats:
+        voice_line = (
+            f"| Step | Value |\n| --- | --- |\n"
+            f"| Recording length | {voice_stats['audio_seconds']} s |\n"
+            f"| Transcription on CPU | {voice_stats['seconds']} s |\n"
+            f"| Speed against real time | {voice_stats['realtime']}x |\n"
+            f"| Rooms, price, meal and place all read | "
+            f"{'yes' if voice_stats['complete'] else 'no'} |\n\n"
+            "Whisper small, int8, on the hub's own processor. No audio leaves the\n"
+            "machine, which matters because a host is recorded at home."
+        )
+    else:
+        voice_line = "Speech recognition is not installed on this machine, so it was not measured."
 
     report = f"""# Measurements
 
@@ -138,6 +177,9 @@ Python {platform.python_version()}. Model runner: {model.model}.
     report += f"""
 {comparison} On every message in the demo the rules read each field, so the
 model is not called at all and a booking leaves for the host in milliseconds.
+
+## Understanding a host who speaks instead of typing
+{voice_line}
 
 ## What one exchange costs the host
 

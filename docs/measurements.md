@@ -4,17 +4,28 @@ Measured on x86_64 CPU, no GPU, no network call in the booking
 path. Re-run with `python scripts/measure.py`.
 
 Machine: Darwin 24.6.0 on x86_64,
-Python 3.14.7. Model runner: gemma3:1b.
+Python 3.12.14. Model runner: gemma3:1b.
 
 ## How long a booking takes
 
 | Step | Median | 95th percentile | Worst |
 | --- | --- | --- | --- |
-| Read a message the rules can read | 0.1 ms | 0.5 ms | 3.2 ms |
-| Read a message needing the 1B model | 2595.0 ms | 2943.4 ms | 7980.7 ms |
+| Read a message the rules can read | 0.1 ms | 0.5 ms | 3.5 ms |
+| Read a message needing the 1B model | 1564.5 ms | 1810.3 ms | 7089.8 ms |
 
-The rules answer in well under a millisecond. The model takes about 2.6 seconds, some 25,950 times longer, which is why it is asked last and only for what the rules left blank. On every message in the demo the rules read each field, so the
+The rules answer in well under a millisecond. The model takes about 1.6 seconds, some 15,645 times longer, which is why it is asked last and only for what the rules left blank. On every message in the demo the rules read each field, so the
 model is not called at all and a booking leaves for the host in milliseconds.
+
+## Understanding a host who speaks instead of typing
+| Step | Value |
+| --- | --- |
+| Recording length | 5.7 s |
+| Transcription on CPU | 3.7 s |
+| Speed against real time | 1.5x |
+| Rooms, price, meal and place all read | yes |
+
+Whisper small, int8, on the hub's own processor. No audio leaves the
+machine, which matters because a host is recorded at home.
 
 ## What one exchange costs the host
 
@@ -35,7 +46,7 @@ silently becomes a two-segment message and doubles the price.
 | Item | Value |
 | --- | --- |
 | Language model on disk | 815.0 MB |
-| Python in the hub and channels | 1610 lines |
+| Python in the hub and channels | 1966 lines |
 | Runtime dependencies | FastAPI, uvicorn, httpx (SQLite is in the standard library) |
 | Database | one SQLite file |
 | Internet needed to take a booking | none |

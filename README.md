@@ -1,59 +1,157 @@
 # Karibu
 
-The SMS receptionist for tourism micro-enterprises.
+**A guesthouse owner with a basic phone takes a booking from a Korean visitor, in French, for the price of one SMS.**
 
-A guesthouse owner with a basic phone receives a booking from a foreign visitor, translated on the spot, and confirms by texting `1`. No app, no internet on the host side, no middleman.
+No app to install, no smartphone, no bank card, and no internet on the host's
+side. Built by team **LeKontinent** for the World Bank *Small AI for
+Development* hackathon, tourism track, 3–4 October 2026.
 
-Built by team **LeKontinent** (Uriel, Ruth, Rouguiatou) for the World Bank Small AI for Development Hackathon, tourism track, October 3-4, 2026.
+---
 
 ## The problem
 
-Around parks, waterfalls and heritage sites, guesthouses, guides and artisans do not exist online. They have no website, no booking system and no common language with the visitor. Booking platforms need a smartphone, a stable connection and a bank card, and they take a commission. The tourism office has no data on what happens on its territory.
+Around parks, waterfalls and heritage sites, the guesthouses, guides and
+artisans who actually receive visitors do not exist online. No website, no
+booking, no shared language with the traveller. Every booking platform assumes
+a smartphone, a steady connection and a card, then takes a commission. The
+money stays with intermediaries in the capital, and the tourism office has no
+idea what happens on its own territory.
 
-## What Karibu does
+Karibu gives those hosts a booking system that fits in a text message.
 
-1. **Sign-up by voice.** The host calls a number and describes the rooms. Karibu turns the recording into a listing and confirms it by SMS.
-2. **Visitor request.** The visitor writes in Korean or English on a simple web page. Karibu translates it locally and sends one SMS to the host in French: `Request: 2 nights Oct 12-14, 2 guests, breakfast. Reply 1=YES 2=NO 3=OTHER DATE`.
-3. **Confirmation.** The host replies `1`. The visitor gets a confirmation in their own language. The host gets a reminder the day before.
-4. **Open catalogue.** Every listing is exported as open JSON for the tourism office, with a dashboard of listings, bookings and occupancy.
-
-## How it runs
-
-One small "hub" runs the AI models. In the demo it is a laptop, CPU only. In real life it is a Raspberry Pi at the tourism office. Hosts reach it by SMS through a gateway. No cloud AI is in the loop.
+## What it does
 
 ```
-Host (basic phone) <-- SMS --> Gateway (Africa's Talking) <--> Hub (FastAPI + SQLite + small models) <--> Visitor web page / Tourism office dashboard
+Visitor (any language, web page)          Host (basic phone, SMS)
+        │                                          ▲
+        │  10월 12일부터 2박, 2명 가능한가요?          │  Karibu: demande 2n 12-14 oct,
+        │                                          │  2 pers +petit dej. Total 16000
+        ▼                                          │  FCFA. Repondre 1=OUI 2=NON
+   ┌────────────────────────────────────────────┐  │  3=AUTRE DATE
+   │  Karibu hub — one laptop or Raspberry Pi   │──┘
+   │  rules → small model → SQLite → SMS        │◄─── 1
+   └────────────────────────────────────────────┘
+        │
+        ▼  확정되었습니다. 10월 12일-14일, 2명, 조식 포함, 16000 FCFA.
 ```
 
-Models: NLLB-200 600M for translation, Gemma 3 1B for extraction, faster-whisper small for voice.
+1. **The host signs up by voice.** They describe their rooms out loud. Whisper
+   transcribes it on the hub, rules read the rooms, the price and the place, and
+   the host confirms by texting `1`. Nothing is public until they do.
+2. **A visitor writes in their own language.** Korean, English or French, on a
+   plain web page.
+3. **The host gets one SMS in French** and answers with a single character.
+4. **The visitor gets a confirmation in their own language**, and the host a
+   reminder the day before arrival.
+5. **The tourism office gets a dashboard and an open catalogue**, so the rooms
+   can be listed by any destination portal.
 
-## Repository layout
+## The decision that shapes everything
 
-| Folder | What it holds | Owner |
+**The model never writes the host's message, and never reads a date.**
+
+A one-billion-parameter model is small enough for a Raspberry Pi and too small
+to be trusted with a booking. Asked for *"du 20 au 23 octobre"* it answered the
+23rd. Asked about a message that never mentioned food, it said breakfast was
+included. Every time.
+
+So Karibu reads dates, nights, head counts, prices and meals with rules, in
+Korean, French and English, including relative dates like *next Friday* and
+numbers spoken as words like *huit mille*. The model is asked only for what the
+rules could not read, it can never overwrite them, and its answers are
+range-checked before use. When neither can read a date, Karibu says so instead
+of guessing.
+
+Every outgoing message is then built from a fixed template with those values
+dropped in, so a price or a date cannot be mistranslated. The host confirms
+before any booking exists.
+
+| Path | Median | What it reads |
 | --- | --- | --- |
-| `hub/` | FastAPI server, SQLite, translation, extraction, voice, booking flow | Uriel |
-| `channels/` | SMS and voice gateway (Africa's Talking), webhooks | Rouguiatou |
-| `dashboard/` | Visitor web page, tourism office dashboard, catalogue export | Ruth |
-| `docs/` | Demo scenario, architecture, measurements, pitch material | Ruth |
+| Rules | 0.1 ms | Every field, in all the demo messages |
+| 1B model | ~2.6 s | Only the blanks the rules left |
+
+Full numbers, including the cost per booking, are in [docs/measurements.md](docs/measurements.md).
 
 ## Setup
 
-Five commands, to be filled in as the hub takes shape:
+Needs Python 3.12 and [Ollama](https://ollama.com). Speech recognition is
+optional; everything else works without it.
 
 ```bash
-git clone https://github.com/nguefackuriel/karibu.git
-cd karibu
-# 3. install dependencies
-# 4. download models
-# 5. run the hub
+git clone https://github.com/nguefackuriel/karibu.git && cd karibu
+python3.12 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
+ollama pull gemma3:1b
+python -m hub.seed
+uvicorn hub.app:app --port 8000
 ```
+
+Then open <http://127.0.0.1:8000/visitor> to book, and
+<http://127.0.0.1:8000/> for the tourism office.
+
+To watch the whole scenario in the terminal:
+
+```bash
+python scripts/demo.py
+```
+
+## Tests
+
+```bash
+python -m pytest -m "not slow"   # 138 tests, no model and no network needed
+python -m pytest                 # adds one test against a real recording
+```
+
+The suite replays whole bookings without a phone: the request, a host who
+answers `1`, one who writes `Oui merci`, one who writes something unreadable,
+one who never answers, refusals, other dates and cancellations. One test asserts
+that **every host message fits a single 160-character GSM-7 SMS segment**, so a
+change to the wording cannot quietly double what the host pays.
 
 ## What is real and what is simulated
 
-To be written before submission. Real: SMS gateway simulator, translation, extraction, booking flow, voice sign-up, dashboard, catalogue export, measured latency on CPU. Simulated: Mobile Money payment, deployment on a Raspberry Pi.
+**Real**, running on the machine: the booking flow, the rules, the 1B model, the
+speech recognition, the SQLite database, the visitor page, the dashboard, the
+open catalogue, the SMS gateway against the Africa's Talking sandbox, and every
+measurement in `docs/measurements.md`.
 
-## How we work
+**Simulated, and said plainly:**
 
-- One branch per person: `uriel`, `ruth`, `rouguiatou`. Open a pull request into `main`. Uriel merges.
-- `main` always runs.
-- English in code, README and docs. French only in the host-side SMS shown in the demo.
+- **Mobile money.** The confirmation tells the visitor to pay on arrival. No
+  payment is taken.
+- **The Raspberry Pi.** The demo runs on a laptop, CPU only, and the timings are
+  reported on CPU so a Pi is a fair extrapolation. Not yet run on the hardware.
+- **The SMS itself** goes through the Africa's Talking sandbox simulator, not a
+  paid short code.
+- **The host.** `Mme Tchoua` in `hub/seed.py` is a placeholder. The village
+  (Bafang) and the site (the Metché falls) are real. The pitch names a real host
+  only once one has agreed.
+
+## Acknowledged trade-offs
+
+- **160 characters instead of a screen.** Every question to the host is closed
+  and every answer is one character. Rich choice is given up for a message that
+  costs one segment and shows on any handset.
+- **Rules instead of a bigger model.** Rules do not generalise; they had to be
+  written for each language. In exchange, the dates are right and the answer
+  arrives in a millisecond.
+- **The host waits.** Confirmation is asynchronous, and the visitor is told to
+  allow two hours. After that the request expires and the visitor is freed.
+- **Three languages, not a hundred.** Korean, French and English are read by
+  rule. Another language means another small table, not a retrained model.
+- **No booking is final without a human.** The model can be wrong; the host is
+  the check. That is slower than an automatic confirmation, and it is the only
+  version worth deploying.
+
+## Repository
+
+| Folder | What it holds |
+| --- | --- |
+| `hub/` | The server: booking flow, SMS templates, SQLite, and the rules and model services |
+| `channels/` | The way out: console gateway for the demo, Africa's Talking for real SMS |
+| `dashboard/static/` | The visitor page and the tourism office dashboard, plain HTML |
+| `scripts/` | `demo.py` walks the scenario, `measure.py` regenerates the numbers |
+| `docs/` | Measurements, and the demo scenario |
+| `tests/` | 139 tests, including one against a real recording |
+
+Licence: MIT.
