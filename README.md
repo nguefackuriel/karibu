@@ -119,9 +119,18 @@ to reach this machine:
 ./scripts/tunnel.sh        # prints a public https address
 ```
 
-Paste the address it prints, ending in `/api/sms/inbound`, into the sandbox's
-SMS callback setting. The address changes every time the tunnel restarts.
-Without it, host replies still work through `/api/sms/simulate`, which is what
+Two things are needed on the Africa's Talking side, and both are easy to miss:
+
+1. **A shortcode.** Create one in the sandbox app under SMS. Replies cannot go
+   back to the alphanumeric sender ID the message appears to come from, so
+   without a shortcode there is nowhere for the host to answer.
+2. **The incoming-messages callback**, set to the address the script prints,
+   ending in `/api/sms/inbound`. This is a different field from the delivery
+   report callback.
+
+The address changes every time the tunnel restarts, so re-paste it then. In the
+simulator, send the reply to the shortcode, not to the sender ID. Without any of
+this, host replies still work through `/api/sms/simulate`, which is what
 `scripts/demo.py` uses.
 
 ## Tests
@@ -153,9 +162,11 @@ their simulator, and the hub records whether the operator took it.
   reported on CPU so a Pi is a fair extrapolation. Not yet run on the hardware.
 - **The handset.** Messages reach the Africa's Talking simulator, which is a web
   page standing in for a phone, not a paid short code on a real network.
-- **The host's reply** needs a public callback URL. Outgoing SMS works as it
-  will in production; incoming replies run through `/api/sms/simulate` until a
-  tunnel points at `/api/sms/inbound`.
+- **The network.** Both directions are real API traffic through Africa's
+  Talking, verified end to end: a Korean request produced a French SMS that
+  arrived on the simulated handset, the reply `1` came back over their
+  incoming-messages callback, and the booking confirmed itself. What is
+  simulated is the handset and the operator's network, not the integration.
 - **The host.** `Mme Tchoua` in `hub/seed.py` is a placeholder. The village
   (Bafang) and the site (the Metché falls) are real. The pitch names a real host
   only once one has agreed.
