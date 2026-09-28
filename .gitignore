@@ -32,3 +32,4 @@ models/
 *.mov
 *.wav
 *.mp3
+.venv/
