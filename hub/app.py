@@ -104,16 +104,22 @@ def deliver(messages: list[flow.Outbound], ref: str) -> list[dict]:
     delivered = []
     for message in messages:
         text = message.text
+        status: dict = {}
         if message.channel == "sms":
             sent = gateway.send_sms(message.to, text)
             segments = sent.segments
+            # Say whether the operator took it, so a failed send is visible
+            # in the demo rather than discovered afterwards.
+            status = {"accepted": sent.ok, "via": gateway.name}
+            if not sent.ok:
+                status["detail"] = sent.detail
         else:
             segments = 1
         store.log_message(db, ref, "out", message.channel, message.to, text,
                           lang=message.lang, template=message.key, segments=segments)
         delivered.append({
             "channel": message.channel, "to": message.to, "lang": message.lang,
-            "template": message.key, "text": text, "segments": segments,
+            "template": message.key, "text": text, "segments": segments, **status,
         })
     return delivered
 

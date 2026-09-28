@@ -20,6 +20,10 @@ KOREAN_REQUEST = "10월 12일부터 2박, 2명 가능한가요? 아침 식사 �
 def client(tmp_path, monkeypatch):
     db_path = tmp_path / "test.db"
     monkeypatch.setenv("KARIBU_DB", str(db_path))
+    # Pin the host's number so the suite does not depend on a local .env,
+    # and blank the API key so a test can never send a real SMS.
+    monkeypatch.setenv("KARIBU_HOST_PHONE", HOST_PHONE)
+    monkeypatch.setenv("AT_API_KEY", "")
     seed.run(str(db_path))
 
     from hub.app import app, state

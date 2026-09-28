@@ -11,10 +11,12 @@ import os
 
 from hub import db as store
 
+# The host's number comes from KARIBU_HOST_PHONE so the demo texts whichever
+# handset is open in the Africa's Talking simulator.
 HOST = {
     "host_id": "h-bafang-01",
     "name": "Mme Tchoua",           # placeholder, to be replaced by the real host
-    "phone": "+237600000001",       # placeholder
+    "phone": os.environ.get("KARIBU_HOST_PHONE", "+237600000001"),
     "village": "Bafang",
     "site": "Chutes de la Metche",
     "lang": "fr",
@@ -35,10 +37,14 @@ LISTING = {
 
 
 def run(path: str | None = None) -> None:
+    from hub.app import load_env_file
+    load_env_file()
+    HOST["phone"] = os.environ.get("KARIBU_HOST_PHONE", HOST["phone"])
     db = store.connect(path or os.environ.get("KARIBU_DB"))
     store.add_host(db, **HOST)
     store.add_listing(db, **LISTING)
-    print(f"seeded host {HOST['name']} and listing {LISTING['listing_id']}")
+    print(f"seeded host {HOST['name']} on {HOST['phone']} "
+          f"with listing {LISTING['listing_id']}")
     db.close()
 
 

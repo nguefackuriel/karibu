@@ -128,8 +128,9 @@ change to the wording cannot quietly double what the host pays.
 
 **Real**, running on the machine: the booking flow, the rules, the 1B model, the
 speech recognition, the SQLite database, the visitor page, the dashboard, the
-open catalogue, the SMS gateway against the Africa's Talking sandbox, and every
-measurement in `docs/measurements.md`.
+open catalogue and every measurement in `docs/measurements.md`. The outgoing SMS
+is a real API call: Africa's Talking accepts each message and delivers it to
+their simulator, and the hub records whether the operator took it.
 
 **Simulated, and said plainly:**
 
@@ -137,8 +138,11 @@ measurement in `docs/measurements.md`.
   payment is taken.
 - **The Raspberry Pi.** The demo runs on a laptop, CPU only, and the timings are
   reported on CPU so a Pi is a fair extrapolation. Not yet run on the hardware.
-- **The SMS itself** goes through the Africa's Talking sandbox simulator, not a
-  paid short code.
+- **The handset.** Messages reach the Africa's Talking simulator, which is a web
+  page standing in for a phone, not a paid short code on a real network.
+- **The host's reply** needs a public callback URL. Outgoing SMS works as it
+  will in production; incoming replies run through `/api/sms/simulate` until a
+  tunnel points at `/api/sms/inbound`.
 - **The host.** `Mme Tchoua` in `hub/seed.py` is a placeholder. The village
   (Bafang) and the site (the Metché falls) are real. The pitch names a real host
   only once one has agreed.
