@@ -33,3 +33,7 @@ models/
 *.wav
 *.mp3
 .venv/
+.pythons/
+
+# the one recording the demo needs
+!tests/fixtures/*.wav

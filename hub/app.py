@@ -10,12 +10,13 @@ from __future__ import annotations
 
 import os
 import secrets
+import tempfile
 from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import date, datetime
 from pathlib import Path
 
-from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -24,7 +25,9 @@ from hub import booking as flow
 from hub import db as store
 from hub import templates as tpl
 from hub.services.extract import extract
+from hub.services.listing import read as read_listing
 from hub.services.ollama import Ollama
+from hub.services.voice import TranscriptionUnavailable, Whisper
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "dashboard" / "static"
 
@@ -41,6 +44,7 @@ async def lifespan(app: FastAPI):
     state["db"] = store.connect(os.environ.get("KARIBU_DB"))
     state["gateway"] = from_environment()
     state["model"] = Ollama(model=os.environ.get("KARIBU_MODEL", "gemma3:1b"))
+    state["voice"] = Whisper(size=os.environ.get("KARIBU_WHISPER", "small"))
     yield
     state["db"].close()
 
@@ -117,6 +121,8 @@ def health():
         "gateway": state["gateway"].name,
         "model": model.model,
         "model_reachable": model.available(),
+        "voice": state["voice"].size,
+        "voice_available": state["voice"].available(),
     }
 
 
@@ -218,10 +224,33 @@ def request_status(ref: str):
 # --- the host -----------------------------------------------------------------
 
 
+def pending_listing_for(phone: str):
+    """A listing the host described but has not confirmed yet."""
+    return state["db"].execute(
+        "SELECT l.* FROM listings l JOIN hosts h ON h.id = l.host_id"
+        " WHERE h.phone = ? AND l.confirmed = 0 ORDER BY l.created_at DESC LIMIT 1",
+        (phone,),
+    ).fetchone()
+
+
 def handle_host_sms(sender: str, text: str) -> dict:
     db = state["db"]
     row = store.open_booking_for_phone(db, sender)
+
     if row is None:
+        # No booking waiting, so this may be the answer to a new listing.
+        listing = pending_listing_for(sender)
+        if listing is not None:
+            digit = flow.normalise_reply(text)
+            store.log_message(db, listing["id"], "in", "sms", sender, text)
+            if digit == "1":
+                store.confirm_listing(db, listing["id"], True)
+                return {"handled": True, "listing_id": listing["id"],
+                        "state": "listing_confirmed", "understood": digit, "sent": []}
+            if digit == "2":
+                return {"handled": True, "listing_id": listing["id"],
+                        "state": "listing_needs_correction", "understood": digit,
+                        "sent": []}
         return {"handled": False, "reason": f"no open booking for {sender}"}
 
     listing = store.get_listing(db, row["listing_id"])
@@ -252,6 +281,87 @@ async def sms_simulate(payload: dict):
     """The same thing without an account, so the demo runs anywhere."""
     return handle_host_sms((payload.get("from") or "").strip(),
                            (payload.get("text") or "").strip())
+
+
+# --- the host signs up by voice -----------------------------------------------
+
+
+def create_listing_from_transcript(transcript: str, phone: str, host_name: str = "") -> dict:
+    """Turn a spoken description into a listing the host must still confirm."""
+    db = state["db"]
+    reading = read_listing(transcript)
+    if not reading.complete:
+        return {"created": False, "understood": reading.__dict__,
+                "error": "the recording did not give both a number of rooms and a price"}
+
+    host = store.host_by_phone(db, phone)
+    if host is None:
+        host_id = f"h-{secrets.token_hex(3)}"
+        store.add_host(db, host_id, host_name or "Nouvel hote", phone,
+                       village=reading.place, site=None)
+    else:
+        host_id = host["id"]
+
+    listing_id = f"L-{secrets.token_hex(3)}"
+    store.add_listing(
+        db, listing_id, host_id, reading.rooms, reading.price_per_night,
+        place=reading.place, breakfast=bool(reading.breakfast),
+        description=f"{reading.rooms} room(s) described by the host",
+        created_by="voice", confirmed=False,
+    )
+
+    message = flow.Outbound(
+        to=phone, channel="sms", lang="fr", key="host_listing_created",
+        params={
+            "rooms": reading.rooms,
+            "price": tpl.format_money(reading.price_per_night),
+            "cur": "FCFA",
+            "meal": " +petit dej" if reading.breakfast else "",
+            "place": (reading.place or "")[:28],
+        },
+    )
+    sent = deliver([message], listing_id)
+    return {"created": True, "listing_id": listing_id, "confirmed": False,
+            "understood": {
+                "rooms": reading.rooms, "price_per_night": reading.price_per_night,
+                "breakfast": reading.breakfast, "place": reading.place,
+                "read_by": reading.read_by, "transcript": reading.transcript,
+            },
+            "sent": sent}
+
+
+@app.post("/api/listings/transcript")
+async def listing_from_transcript(payload: dict):
+    """The same path as a recording, starting from text. Used by the tests."""
+    return create_listing_from_transcript(
+        (payload.get("transcript") or "").strip(),
+        (payload.get("phone") or "").strip(),
+        payload.get("host_name") or "",
+    )
+
+
+@app.post("/api/listings/voice")
+async def listing_from_voice(phone: str = Form(...), audio: UploadFile = File(...),
+                             host_name: str = Form("")):
+    """A host records a description of their rooms; the hub transcribes it."""
+    voice = state["voice"]
+    if not voice.available():
+        raise HTTPException(503, "no speech recogniser is installed on this hub")
+
+    suffix = Path(audio.filename or "recording.wav").suffix or ".wav"
+    target = Path(tempfile.gettempdir()) / f"karibu-{secrets.token_hex(4)}{suffix}"
+    target.write_bytes(await audio.read())
+    try:
+        transcript = voice.transcribe(target)
+    except TranscriptionUnavailable as error:
+        raise HTTPException(503, str(error)) from error
+    finally:
+        target.unlink(missing_ok=True)
+
+    result = create_listing_from_transcript(transcript, phone.strip(), host_name)
+    result["transcript"] = transcript
+    result["transcription_seconds"] = round(voice.last_latency or 0, 2)
+    return result
 
 
 # --- time ---------------------------------------------------------------------

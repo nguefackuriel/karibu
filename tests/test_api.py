@@ -160,3 +160,73 @@ def test_every_message_is_written_down(client):
     directions = [m["direction"] for m in messages]
     assert directions.count("in") == 2   # the visitor's message and the host's reply
     assert directions.count("out") == 4  # request + ack to each side
+
+
+# --- a host signing up by voice -----------------------------------------------
+
+NEW_HOST = "+237600000042"
+SPOKEN = ("J'ai deux chambres, 8000 francs la nuit avec le petit dejeuner, "
+          "c'est a Bafang pres des chutes.")
+
+
+def test_a_spoken_description_becomes_a_listing_awaiting_confirmation(client):
+    body = client.post("/api/listings/transcript", json={
+        "transcript": SPOKEN, "phone": NEW_HOST, "host_name": "M. Kamdem",
+    }).json()
+
+    assert body["created"] and body["confirmed"] is False
+    understood = body["understood"]
+    assert understood["rooms"] == 2
+    assert understood["price_per_night"] == 8000
+    assert understood["breakfast"] is True
+    assert "Bafang" in understood["place"]
+
+    sms = body["sent"][0]
+    assert sms["channel"] == "sms" and sms["segments"] == 1
+    assert "1=OK" in sms["text"] and "8000" in sms["text"]
+
+
+def test_a_new_listing_is_invisible_until_the_host_confirms(client):
+    body = client.post("/api/listings/transcript", json={
+        "transcript": SPOKEN, "phone": NEW_HOST,
+    }).json()
+    listing_id = body["listing_id"]
+
+    catalogue = client.get("/api/catalogue.json").json()
+    listed = [i["id"] for p in catalogue["providers"] for i in p["items"]]
+    assert listing_id not in listed, "an unconfirmed listing must not be public"
+
+    reply = client.post("/api/sms/simulate",
+                        json={"from": NEW_HOST, "text": "1"}).json()
+    assert reply["state"] == "listing_confirmed"
+
+    catalogue = client.get("/api/catalogue.json").json()
+    listed = [i["id"] for p in catalogue["providers"] for i in p["items"]]
+    assert listing_id in listed
+
+
+def test_a_host_asking_to_correct_leaves_the_listing_unconfirmed(client):
+    client.post("/api/listings/transcript", json={"transcript": SPOKEN, "phone": NEW_HOST})
+    reply = client.post("/api/sms/simulate",
+                        json={"from": NEW_HOST, "text": "2"}).json()
+    assert reply["state"] == "listing_needs_correction"
+    catalogue = client.get("/api/catalogue.json").json()
+    assert len(catalogue["providers"]) == 1, "only the seeded host is public"
+
+
+def test_a_recording_with_no_price_is_refused(client):
+    body = client.post("/api/listings/transcript", json={
+        "transcript": "bonjour, j'ai deux chambres", "phone": NEW_HOST,
+    }).json()
+    assert body["created"] is False
+    assert "price" in body["error"]
+
+
+def test_a_booking_reply_still_wins_over_a_pending_listing(client):
+    """A host with both waiting answers the booking, which is the urgent one."""
+    client.post("/api/listings/transcript",
+                json={"transcript": SPOKEN, "phone": HOST_PHONE})
+    make_request(client)
+    reply = client.post("/api/sms/simulate",
+                        json={"from": HOST_PHONE, "text": "1"}).json()
+    assert reply["state"] == "confirmed"
