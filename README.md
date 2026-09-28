@@ -167,9 +167,9 @@ their simulator, and the hub records whether the operator took it.
   arrived on the simulated handset, the reply `1` came back over their
   incoming-messages callback, and the booking confirmed itself. What is
   simulated is the handset and the operator's network, not the integration.
-- **The host.** `Mme Tchoua` in `hub/seed.py` is a placeholder. The village
-  (Bafang) and the site (the Metché falls) are real. The pitch names a real host
-  only once one has agreed.
+- **The host.** `Nathalie` in `hub/seed.py` is the host in the pitch. The
+  village (Bafang) and the site (the Metché falls) are real. Her surname and
+  photograph stay out until she agrees to them.
 
 ## Acknowledged trade-offs
 

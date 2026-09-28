@@ -37,3 +37,5 @@ models/
 
 # the one recording the demo needs
 !tests/fixtures/*.wav
+
+# the deck is a build output, the script that makes it is the source

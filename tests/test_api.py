@@ -141,7 +141,7 @@ def test_a_message_without_a_date_is_refused_rather_than_guessed(client):
 def test_the_catalogue_is_open_and_readable(client):
     body = client.get("/api/catalogue.json").json()
     provider = body["providers"][0]
-    assert provider["descriptor"]["name"] == "Mme Tchoua"
+    assert provider["descriptor"]["name"] == "Nathalie"
     item = provider["items"][0]
     assert item["price"]["value"] == 8000
     assert item["fulfillment"]["channel"] == "sms"

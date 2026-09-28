@@ -15,7 +15,7 @@ from hub import db as store
 # handset is open in the Africa's Talking simulator.
 HOST = {
     "host_id": "h-bafang-01",
-    "name": "Mme Tchoua",           # placeholder, to be replaced by the real host
+    "name": "Nathalie",             # the host in the pitch; surname withheld until she agrees
     "phone": os.environ.get("KARIBU_HOST_PHONE", "+237600000001"),
     "village": "Bafang",
     "site": "Chutes de la Metche",
