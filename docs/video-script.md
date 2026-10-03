@@ -8,13 +8,14 @@ you are reading them while things happen on screen.
 
 Open these and leave them open. Nothing here can be improvised on the day.
 
-1. Start the hub: `uvicorn hub.app:app --port 8000`
+1. Start the hub: `./scripts/start.sh`
+   Never a bare `uvicorn`. That picks up a system Python with no FastAPI in it.
 2. Start the tunnel: `./scripts/tunnel.sh`, and paste the address it prints into
    the Africa's Talking incoming-messages callback.
 3. Open the visitor page at `http://127.0.0.1:8000/visitor`
 4. Open the dashboard at `http://127.0.0.1:8000/`
 5. Open the Africa's Talking simulator and connect the host's number.
-6. Reset the data so the dashboard starts clean: `rm karibu.db && python -m hub.seed`
+6. Reset the data so the dashboard starts clean: `./scripts/start.sh 8000 fresh`
 7. Do one full run to warm the model, then reset again. The first model call is
    slow because it loads, and you do not want that on camera.
 

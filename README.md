@@ -80,10 +80,9 @@ optional; everything else works without it.
 
 ```bash
 git clone https://github.com/nguefackuriel/karibu.git && cd karibu
-python3.12 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
+python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 ollama pull gemma3:1b
-python -m hub.seed
-uvicorn hub.app:app --port 8000
+./scripts/start.sh
 ```
 
 Then open <http://127.0.0.1:8000/visitor> to book, and
@@ -118,6 +117,10 @@ to reach this machine:
 ```bash
 ./scripts/tunnel.sh        # prints a public https address
 ```
+
+Run the hub with `./scripts/start.sh`, not a bare `uvicorn`: a bare one takes
+whichever Python is first on PATH, which is usually not the one holding this
+project's packages.
 
 Two things are needed on the Africa's Talking side, and both are easy to miss:
 
