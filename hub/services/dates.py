@@ -135,6 +135,8 @@ def _find_bare_range(text: str) -> tuple[int, int] | None:
     patterns = [
         rf"du\s+(\d{{1,2}})\s+au\s+(\d{{1,2}})\s+(?:{MONTH_WORDS})",
         rf"from\s+(\d{{1,2}})(?:st|nd|rd|th)?\s+to\s+(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:of\s+)?(?:{MONTH_WORDS})",
+        # The en dash here is not punctuation in our writing: it is a character a
+        # traveller may type in a date range, so the rule has to accept it.
         rf"\b(\d{{1,2}})\s*[-–]\s*(\d{{1,2}})\s+(?:{MONTH_WORDS})",
     ]
     for pattern in patterns:

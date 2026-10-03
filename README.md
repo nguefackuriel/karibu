@@ -4,7 +4,7 @@
 
 No app to install, no smartphone, no bank card, and no internet on the host's
 side. Built by team **LeKontinent** for the World Bank *Small AI for
-Development* hackathon, tourism track, 3–4 October 2026.
+Development* hackathon, tourism track, 3 and 4 October 2026.
 
 ---
 
@@ -28,7 +28,7 @@ Visitor (any language, web page)          Host (basic phone, SMS)
         │                                          │  2 pers +petit dej. Total 16000
         ▼                                          │  FCFA. Repondre 1=OUI 2=NON
    ┌────────────────────────────────────────────┐  │  3=AUTRE DATE
-   │  Karibu hub — one laptop or Raspberry Pi   │──┘
+   │  Karibu hub: one laptop or Raspberry Pi   │──┘
    │  rules → small model → SQLite → SMS        │◄─── 1
    └────────────────────────────────────────────┘
         │

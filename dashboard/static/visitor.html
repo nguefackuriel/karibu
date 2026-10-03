@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Karibu — book a room</title>
+<title>Karibu, book a room</title>
 <style>
   :root{
     --ink:#1c1a17; --muted:#6b6459; --line:#e0d9cd; --paper:#faf7f1;
@@ -120,9 +120,9 @@ function renderUnderstood(u) {
   const tag = (f) => by[f] ? `<span class="tag">${by[f]}</span>` : "";
   $("understood").innerHTML = `<div class="understood"><b>What Karibu understood</b>
     <dl>
-      <dt>Arrival</dt><dd>${u.check_in ?? "—"} ${tag("check_in")}</dd>
-      <dt>Nights</dt><dd>${u.nights ?? "—"} ${tag("nights")}</dd>
-      <dt>Guests</dt><dd>${u.guests ?? "—"} ${tag("guests")}</dd>
+      <dt>Arrival</dt><dd>${u.check_in ?? "not read"} ${tag("check_in")}</dd>
+      <dt>Nights</dt><dd>${u.nights ?? "not read"} ${tag("nights")}</dd>
+      <dt>Guests</dt><dd>${u.guests ?? "not read"} ${tag("guests")}</dd>
       <dt>Breakfast</dt><dd>${u.breakfast ? "yes" : "no"} ${tag("breakfast")}</dd>
     </dl></div>`;
 }
@@ -150,7 +150,7 @@ async function refresh() {
   const body = await (await fetch(`/api/requests/${ref}`)).json();
   const settled = body.state !== "awaiting_host";
   $("dot").className = "dot" + (body.state === "confirmed" ? " ok" : "");
-  $("state").textContent = `${body.state.replace("_", " ")} — ${body.ref}`;
+  $("state").textContent = `${body.state.replace("_", " ")}, booking ${body.ref}`;
   $("thread").innerHTML = body.messages
     .filter(m => m.channel === "web" && m.direction === "out")
     .map(m => `<div class="msg">${m.body}</div>`).join("");
